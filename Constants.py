@@ -33,7 +33,8 @@ API_WP_AUTHENTICATION_HEADER = {
 
 API_WP_POSTS_HEADER = {
     'Content-Type': 'application/json',
-    'Accept': 'application/json'
+    'Accept': 'application/json',
+    "X-Dataverse-key": os.getenv("DATAVERSE_TOKEN")
 }
 
 API_WP_AUTHENTICATION_BODY = {
@@ -51,7 +52,8 @@ API_WP_CREATEPOTS_HEADER = {
 }
 
 API_DATAVERSES_PUBLISHDATASET_HEADER = {
-    "X-Dataverse-key": os.getenv("DATAVERSE_TOKEN")
+    "X-Dataverse-key": os.getenv("DATAVERSE_TOKEN"),
+    "Content-Type": "application/x-www-form-urlencoded; charset=UTF-8"
 }
 
 dateDiff = 14

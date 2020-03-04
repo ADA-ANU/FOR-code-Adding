@@ -4,15 +4,14 @@ import requests
 import json
 import Constants
 from datetime import datetime
-from time import sleep
 import csv
 
-newlyPublished = []
-newlyUpdated = []
-wpToken = ""
-waitingToTweet = []
-Pcount = 0
-Ucount = 0
+fetchError = []
+updateError = []
+publishError = []
+unKnownError = []
+draftUpdate = []
+successDatasets = []
 
 
 def currentDateTime():
@@ -22,7 +21,7 @@ def currentDateTime():
 
 
 def readCSV():
-    with open('Book1.csv') as csv_file:
+    with open('FORcode.csv') as csv_file:
         csv_reader = csv.reader(csv_file, delimiter=',')
         line_count = 0
         for row in csv_reader:
@@ -30,11 +29,43 @@ def readCSV():
                 print('Column names are' + ", ".join(row))
                 line_count += 1
             else:
-                # print(", ".join(row))
                 line_count += 1
-                print(row[1], row[3])
-                fetchDataset(row[1], row[3])
+                print(row[3], row[4])
+                fetchDataset(row[3], row[4])
         print(f'Processed {line_count} lines.')
+        writeResult()
+
+
+def writeResult():
+    f = open('error.csv', 'w')
+    with f:
+        writer = csv.writer(f)
+        writer.writerow(["Fetch error: "])
+        for i in fetchError:
+            writer.writerow(i)
+        writer.writerow([])
+        writer.writerow(["Update error: "])
+        for i in updateError:
+            writer.writerow(i)
+        writer.writerow([])
+        writer.writerow(["Publish error: "])
+        for i in publishError:
+            writer.writerow(i)
+        writer.writerow([])
+        writer.writerow(["Other error: "])
+        for i in unKnownError:
+            writer.writerow(i)
+        writer.writerow([])
+        writer.writerow(["Draft: "])
+        for i in draftUpdate:
+            writer.writerow(i)
+
+    f = open('success.csv', 'w')
+    with f:
+        writer = csv.writer(f)
+        writer.writerow(["Successfully updated: "])
+        for i in successDatasets:
+            writer.writerow(i)
 
 
 def fetchDataset(doi, forCode):
@@ -44,24 +75,28 @@ def fetchDataset(doi, forCode):
     try:
         r = requests.get(Constants.API_FETCHDATASET + doi, headers=Constants.API_WP_POSTS_HEADER)
         print("fetch " + str(r.status_code))
-        if r.status_code == 200:
+        # print(json.loads(r.text))
+        if r.status_code == 200 or r.status_code == 201:
+            r.encoding = "utf-8"
             res = json.loads(r.text)
-            updateJSON = res['data']['latestVersion']
+            if 'latestVersion' in res['data']:
+                updateJSON = res['data']['latestVersion']
+                status = res['data']['latestVersion']['versionState']
+            else:
+                logging(doi, 'unknown', "key latestVersion doesn't exist, ")
             for k in entries:
                 updateJSON.pop(k, None)
-            # print(updateJSON)
-            # updateJSON['metadataBlocks']['citation']['fields'][0]['value'] = forCode
             fields = editDataset(updateJSON, forCode)
-            # print(fields)
             updateJSON['metadataBlocks']['citation']['fields'] = fields
-            updateDataset(doi, updateJSON)
+            updateDataset(doi, updateJSON, status)
+        else:
+            logging(doi, 'fetch', json.loads(r.text))
     except Exception as error:
         print('ERROR', error)
 
 
 def editDataset(dataset, forCode):
     fields = dataset['metadataBlocks']['citation']['fields']
-    # print(fields)
     topicJSON = {"typeName": "topicClassification",
                  "multiple": True,
                  "typeClass": "compound",
@@ -71,13 +106,12 @@ def editDataset(dataset, forCode):
                              "typeName": "topicClassValue",
                              "multiple": False,
                              "typeClass": "primitive",
-                             "value": "16"
+                             "value": forCode
                          }
-                     }
+                      }
                  ]
                  }
 
-    # topicJSON = json.loads(topicClassification)
     for i in fields:
         if i['typeName'] == 'topicClassification':
             if i['multiple']:
@@ -94,15 +128,49 @@ def editDataset(dataset, forCode):
     return fields
 
 
-def updateDataset(doi, data):
+def logging(doi, stage, info):
+    if stage == 'fetch':
+        fetchError.append([doi, 'https://dataverse-dev.ada.edu.au/dataset.xhtml?persistentId='+doi, info])
+    elif stage == 'update':
+        updateError.append([doi, 'https://dataverse-dev.ada.edu.au/dataset.xhtml?persistentId='+doi, info])
+    elif stage == 'publish':
+        publishError.append([doi, 'https://dataverse-dev.ada.edu.au/dataset.xhtml?persistentId='+doi, info])
+    elif stage == 'draft':
+        draftUpdate.append([doi, 'https://dataverse-dev.ada.edu.au/dataset.xhtml?persistentId=' + doi, info])
+    elif stage == 'success':
+        successDatasets.append([doi, 'https://dataverse-dev.ada.edu.au/dataset.xhtml?persistentId=' + doi])
+    else:
+        print("unknown error")
+        unKnownError.append([doi, 'https://dataverse-dev.ada.edu.au/dataset.xhtml?persistentId='+doi, info])
+
+    print("Log saved.")
+
+
+def updateDataset(doi, data, status):
+
     try:
-        r = requests.put(Constants.API_UPDATEDATASET + doi, data=json.dumps(data, ensure_ascii=False),
+        tempD = json.dumps(data, ensure_ascii=True).encode('UTF-8')
+    except Exception as error:
+        print(error)
+        logging(doi, 'unknown', error)
+    try:
+        r = requests.put(Constants.API_UPDATEDATASET + doi, data=tempD,
                          headers=Constants.API_DATAVERSES_PUBLISHDATASET_HEADER)
 
         print("update " + str(r.status_code))
-        publishDataset(doi)
+        if r.status_code == 200 or r.status_code == 201:
+            if status == 'RELEASED':
+                publishDataset(doi)
+            else:
+                log = "Dataset is in draft mode, no need to publish."
+                print(log)
+                logging(doi, 'draft', log)
+        else:
+            print("Update failed !")
+            logging(doi, 'update', json.loads(r.text))
     except Exception as error:
         print(error)
+        logging(doi, 'unknown', error)
 
 
 def publishDataset(doi):
@@ -110,7 +178,12 @@ def publishDataset(doi):
         r = requests.post(Constants.API_PUBLISHDATASET + doi + "&type=minor",
                           headers=Constants.API_DATAVERSES_PUBLISHDATASET_HEADER)
         print("publish " + str(r.status_code))
-        print("Done")
+        if r.status_code == 200 or r.status_code == 201:
+            print("Done")
+            logging(doi, 'success', "")
+        else:
+            print("Publish failed !")
+            logging(doi, 'publish', json.loads(r.text))
     except Exception as error:
         print('ERROR', error)
 
@@ -118,7 +191,7 @@ def publishDataset(doi):
 def main():
     print(str(currentDateTime()) + " Executing...")
     readCSV()
-    # print(fetchDataset('doi:10.5072/FK2/XS0BPD', '02'))
+    # fetchDataset('doi:10.5072/82/9CITHR', 1)
 
 
 if __name__ == "__main__":
