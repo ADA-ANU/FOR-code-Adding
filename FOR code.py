@@ -75,22 +75,23 @@ def fetchDataset(doi, forCode):
     try:
         r = requests.get(Constants.API_FETCHDATASET + doi, headers=Constants.API_WP_POSTS_HEADER)
         print("fetch " + str(r.status_code))
-        # print(json.loads(r.text))
-        if r.status_code == 200 or r.status_code == 201:
-            r.encoding = "utf-8"
-            res = json.loads(r.text)
-            if 'latestVersion' in res['data']:
-                updateJSON = res['data']['latestVersion']
-                status = res['data']['latestVersion']['versionState']
-            else:
-                logging(doi, 'unknown', "key latestVersion doesn't exist, please check its status.")
-            for k in entries:
-                updateJSON.pop(k, None)
-            fields = editDataset(updateJSON, forCode)
-            updateJSON['metadataBlocks']['citation']['fields'] = fields
-            updateDataset(doi, updateJSON, status)
-        else:
-            logging(doi, 'fetch', json.loads(r.text))
+        print(json.loads(r.text))
+        # if r.status_code == 200 or r.status_code == 201:
+        #     r.encoding = "utf-8"
+        #     res = json.loads(r.text)
+        #     if 'latestVersion' in res['data']:
+        #         updateJSON = res['data']['latestVersion']
+        #         status = res['data']['latestVersion']['versionState']
+        #     else:
+        #         logging(doi, 'unknown', "key latestVersion doesn't exist, please check its status.")
+        #         return
+        #     for k in entries:
+        #         updateJSON.pop(k, None)
+        #     fields = editDataset(updateJSON, forCode)
+        #     updateJSON['metadataBlocks']['citation']['fields'] = fields
+        #     updateDataset(doi, updateJSON, status)
+        # else:
+        #     logging(doi, 'fetch', json.loads(r.text))
     except Exception as error:
         print('ERROR', error)
 
@@ -165,6 +166,7 @@ def updateDataset(doi, data, status):
                 log = "Dataset is in draft mode, no need to publish."
                 print(log)
                 logging(doi, 'draft', log)
+
         else:
             print("Update failed !")
             logging(doi, 'update', json.loads(r.text))
@@ -190,8 +192,8 @@ def publishDataset(doi):
 
 def main():
     print(str(currentDateTime()) + " Executing...")
-    readCSV()
-    # fetchDataset('doi:10.5072/82/9CITHR', 1)
+    # readCSV()
+    fetchDataset('doi:10.5072/82/B93ZD5', 1)
 
 
 if __name__ == "__main__":
