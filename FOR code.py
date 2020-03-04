@@ -83,7 +83,7 @@ def fetchDataset(doi, forCode):
                 updateJSON = res['data']['latestVersion']
                 status = res['data']['latestVersion']['versionState']
             else:
-                logging(doi, 'unknown', "key latestVersion doesn't exist, ")
+                logging(doi, 'unknown', "key latestVersion doesn't exist, please check its status.")
             for k in entries:
                 updateJSON.pop(k, None)
             fields = editDataset(updateJSON, forCode)
