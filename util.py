@@ -5,7 +5,12 @@ from os import environ
 from pathlib import Path
 
 def get_environ_values():
-  return environ["DATAVERSE_URL"], environ["DATAVERSE_API_KEY"]
+  try:
+    return environ["DATAVERSE_URL"], environ["DATAVERSE_API_KEY"]
+  except:
+    print("Error! Ensure that you've created an '.env' file and that it contains the values 'DATAVERSE_URL' and 'DATAVERSE_API_KEY'.\nIf you have, and you're still getting this error, restart your 'poetry shell' before running the script again.")
+    logging.error("Values 'DATAVERSE_URL' and 'DATAVERSE_API_KEY' were not defined within the '.env' file. If you have, and you're still getting this error, restart your 'poetry shell' before running the script again.")
+    exit()
 
 def get_datasets_content(csv: Path):
   """
@@ -105,24 +110,20 @@ def value_topic_classification(sub_for_codes: list[str] = list()):
     return {}
 
   type_name = ["topicClassValue", "topicClassVocab", "topicClassVocabURI"]
-  return {
-    sub_typename: {
-      "typeName": sub_typename,
-      "multiple": False,
-      "typeClass": "primitive",
-      "value": sub_val
-    }
-    for sub_val, sub_typename in zip(sub_for_codes, type_name)
-  }
+  return {f'citation:{sub_typename}': sub_val for sub_val, sub_typename in zip(sub_for_codes, type_name)}
 
 def topic_classification(for_codes: list[list[str]] = list()):
   """
   """
   return {
-    "typeName": "topicClassification",
-    "multiple": True,
-    "typeClass": "compound",
-    "value": [value_topic_classification(for_code_triplet) for for_code_triplet in for_codes if len(for_code_triplet)==3]
+    "citation:topicClassification": [
+      value_topic_classification(for_code_triplet) 
+      for for_code_triplet in for_codes 
+      if len(for_code_triplet)==3
+    ],
+    "@context":{
+      "citation": "https://dataverse.org/schema/citation/"
+    }
   }
 
 def setup_logging(filename: str="preservation-output.log"):
