@@ -13,8 +13,14 @@ readme = "README.md"
 python = "^3.11"
 requests = "^2.32.3"
 pandas = "^2.2.2"
+requests-toolbelt = "^1.0.0"
+tdqm = "^0.0.1"
 
 
 [build-system]
 requires = ["poetry-core"]
 build-backend = "poetry.core.masonry.api"
+
+[tool.poetry.plugins.dotenv]
+ignore = "false"
+location = ".env"
