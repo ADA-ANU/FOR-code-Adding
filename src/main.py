@@ -21,6 +21,10 @@ def main(log_filename: str, dataverse_url: str, dataverse_api_key: str, csv: Pat
     - for_column_name     <str>   : Name of the column which has FOR data
     - doi_column_name     <str>   : Name of the column which has DOI  
   
+  Function Output:
+    - Write all errors and info to a log file (defined as `log_filename`)
+    - FoR output CSV, recording successful and failed FoR code transactions
+
   """
   print("Beginning to append FoR codes to Dataverse...\n")
   output = []
