@@ -1,0 +1,26 @@
+[tool.poetry]
+name = "for-code-adding"
+version = "0.3.0"
+description = "Add FOR codes to dataverse datasets."
+authors = [
+  "Mingjing Peng <Mingjing.Peng@anu.edu.au>",
+  "Marina McGale <Marina.McGale@anu.edu.au>",
+  "Matej Mitrev <Matej.Mitrev@anu.edu.au>"
+]
+readme = "README.md"
+
+[tool.poetry.dependencies]
+python = "^3.11"
+requests = "^2.32.3"
+pandas = "^2.2.2"
+requests-toolbelt = "^1.0.0"
+tdqm = "^0.0.1"
+
+
+[build-system]
+requires = ["poetry-core"]
+build-backend = "poetry.core.masonry.api"
+
+[tool.poetry.plugins.dotenv]
+ignore = "false"
+location = ".env"
