@@ -37,8 +37,9 @@ def request_dataset(session: sessions.BaseUrlSession, doi: str):
 
   Parameters:
     - session    <sessions.BaseUrlSession> : Reusable class that includes the Dataverse base url and api key in every request
+    - doi        <str>                     : The persistent identifier for a given dataset in Dataverse
 
-  Returns: <dict>
+  Returns: <tuple(<dict>, <bool>)>
 
   """
   response = create_request(session, Request(method='GET', url=f'/api/datasets/:persistentId/?persistentId={doi}'))
@@ -53,18 +54,45 @@ def update_dataset(session: sessions.BaseUrlSession, doi: str, json: dict):
 
   Parameters:
     - session    <sessions.BaseUrlSession> : Reusable class that includes the Dataverse base url and api key in every request
+    - doi        <str>                     : The persistent identifier for a given dataset in Dataverse
+    - json       <dict>                    : The dataset metadata to be updated within the PUT request
 
-  Returns: <dict>
+  Returns: <tuple(<dict>, <bool>)>
   
   """
   response = create_request(session, Request(method="PUT", url=f"/api/datasets/:persistentId/metadata?persistentId={doi}&replace=false", json=json, headers={"Content-Type": "application/ld+json"}))
   if not response.ok:
     logging.error(f"Failed to PUT new json metadata into '{doi}' - Status Code: {response.ok}, Response: {response.text}")
     return {}
-  return response.json().get("data", {})
+  
+  try:
+    json_response = response.json().get("data", {})
+  except:
+    return {}, response.ok
+
+  return json_response, response.ok
 
 def publish_dataset(session: sessions.BaseUrlSession, doi: str, release_type: str = "minor"):
   """
+  Given a DOI, publish the given dataset.
+
+ Parameters:
+    - session       <sessions.BaseUrlSession> : Reusable class that includes the Dataverse base url and api key in every request
+    - doi           <str>                     : The persistent identifier for a given dataset in Dataverse
+    - release_type  <str>                     : Determines whether to bump the 'major' or 'minor' version of the dataset when publishing
+  
+  Returns: <tuple(<dict>, <bool>)>
   
   """
   response = create_request(session, Request(method="POST", url=f"/api/datasets/:persistentId/actions/:publish?persistentId={doi}&type={release_type}"))
+
+  if not response.ok:
+    logging.error(f"Failed to POST to publish the dataset '{doi}' - Status Code: {response.ok}, Response: {response.text}")
+    return {}
+  
+  try:
+    json_response = response.json()
+  except:
+    return {}, response.ok
+
+  return json_response, response.ok

@@ -5,6 +5,13 @@ from os import environ
 from pathlib import Path
 
 def get_environ_values():
+  """
+  Get environment variables from '.env' file.
+  If getting environment variables fails, exit the script.
+
+  Return: <tuple(<str>, <str>)>
+
+  """
   try:
     return environ["DATAVERSE_URL"], environ["DATAVERSE_API_KEY"]
   except:
@@ -12,9 +19,9 @@ def get_environ_values():
     logging.error("Values 'DATAVERSE_URL' and 'DATAVERSE_API_KEY' were not defined within the '.env' file. If you have, and you're still getting this error, restart your 'poetry shell' before running the script again.")
     exit()
 
-def get_datasets_content(csv: Path):
+def get_datasets_content(csv: Path, for_column_name: str, doi_column_name: str):
   """
-  Read in and process a 'CSV' file, but first checking that it exists and is a CSV.
+  Read in and process a 'CSV' file, but first checking that it exists, that the file is a CSV, and that the CSV contains the correct columns.
   Expected 'CSV' file format is as follow (where 'FINAL TRIPLETS' may, or may not, be given):
 
   |------------|------------------------------------------------------------------------------|-----------------------------------------------------------------------------|---------------------|-------------------------------------------------------------------------------------------------------------------------------------------------------------|
@@ -26,7 +33,9 @@ def get_datasets_content(csv: Path):
   |------------|------------------------------------------------------------------------------|-----------------------------------------------------------------------------|---------------------|-------------------------------------------------------------------------------------------------------------------------------------------------------------|
 
   Parameter:
-    - csv   <Path> : Path to the file
+    - csv               <Path> : Path to the file
+    - for_column_name   <str>  : The FoR column name (checked here to exist within the CSV)
+    - doi_column_name   <str>  : The DOI column name (checked here to exist within the CSV)
 
   Returns: <dict[]>    
     [
@@ -61,28 +70,33 @@ def get_datasets_content(csv: Path):
     print(error.format(csv))
     logging.error(error.format(abs_csv))
     exit()
-  
-  # TODO - Check that all the columns exist within the given CSV
 
   df = pd.read_csv(csv)
+  cols = list(df.columns)
+  if for_column_name not in cols and doi_column_name not in cols:
+    print("Error! The FoR and/or DOI columns were not found within the given CSV.")
+    logging.error(f"One or more of columns names '{for_column_name}' and '{doi_column_name}' could not be found within the file {abs_csv}.")
+    exit()
+  
   logging.info(f"Read '.csv' ({abs_csv}), it contained '{df.size}' datasets.")
   return loads(df.to_json(orient="records"))
 
-def triplets_check(dataset: dict, for_column_name: str, id_column_name: str):
+def triplets_check(dataset: dict, for_column_name: str, doi_column_name: str):
   """
-  Check for a required FOR column and log an error for a given dataset which did not have a FOR column.
-
+  Check for a required FoR column and log an error for a given dataset which did not have a FOR column.
+  Note! The script has already checked that the column exists, but double check that the column has content for the given dataset.
+  
   Parameter:
     - dataset           <dict> : Dictionary based on a particular row within the CSV.
-    - for_column_name   <str>  : 
-    - id_column_name    <str>  : Identifier is used for error logs if an issue occurs
+    - for_column_name   <str>  : The key 
+    - doi_column_name   <str>  : Dataset DOI is only used for error log information if an issue occurs
   
   Return: <boolean>
   
   """
   triples_exist = dataset.get(for_column_name)!=None
   if not triples_exist:
-    logging.error(f"Dataset '{dataset[id_column_name]}' did not have any triplets and was excluded from the set")
+    logging.error(f"Dataset '{dataset[doi_column_name]}' did not have any triplets and was excluded from the set")
   return triples_exist
 
 def clean_dataset(dataset: dict, for_column_name: str):
@@ -93,6 +107,33 @@ def clean_dataset(dataset: dict, for_column_name: str):
     - dataset           <dict> : Dictionary based on a particular row within the CSV.
     - for_column_name   <str>  : String used as the key to return the FOR value
   
+  Cleaning Steps:
+    1. Remove any '\"' values from FoR column value
+    2. Split FoR codes by '~' delimiter
+    3. Split sub-FoR codes by ';' delimiter
+
+  Cleaning Example:
+    0. \"INDIGENOUS STUDIES;ANZSRC FoR;https://linked.data.gov.au/def/anzsrc-for/2020/45~HUMAN SOCIETY;ANZSRC FoR;https://linked.data.gov.au/def/anzsrc-for/2020/44\"
+    1. INDIGENOUS STUDIES;ANZSRC FoR;https://linked.data.gov.au/def/anzsrc-for/2020/45~HUMAN SOCIETY;ANZSRC FoR;https://linked.data.gov.au/def/anzsrc-for/2020/44
+    2. [
+      'INDIGENOUS STUDIES;ANZSRC FoR;https://linked.data.gov.au/def/anzsrc-for/2020/45', 
+      'HUMAN SOCIETY;ANZSRC FoR;https://linked.data.gov.au/def/anzsrc-for/2020/44'
+    ]
+    3. [
+      [
+        'INDIGENOUS STUDIES',
+        'ANZSRC FoR',
+        'https://linked.data.gov.au/def/anzsrc-for/2020/45'
+      ], 
+      [
+        'HUMAN SOCIETY',
+        'ANZSRC FoR',
+        'https://linked.data.gov.au/def/anzsrc-for/2020/44'
+      ]
+    ]
+
+  Returns: <dict>
+
   """
   temp_for_col = dataset[for_column_name]
   temp_for_col = re.sub(r'\"', '', temp_for_col)
@@ -101,19 +142,59 @@ def clean_dataset(dataset: dict, for_column_name: str):
 
 def value_topic_classification(sub_for_codes: list[str] = list()):
   """
+  Generate the values within the 'citation:topicClassification' key for the PUT request.
+
+  Parameters:
+    - sub_for_codes <str[]> : Values to populate the topic values.
+      Assumed that they're organised in the following way: ['value', 'vocab', 'uri']
   
-  Will return an empty dict if sub_for_codes is not a length of 3.
-  
+  Returns: <dict>
+
+    {
+      'citation:topicClassValue'    : sub_for_codes[0],
+      'citation:topicClassVocab'    : sub_for_codes[1],
+      'citation:topicClassVocabURI' : sub_for_codes[2]
+    }
+
+    OR
+
+    {}
+
   """
   if len(sub_for_codes)!=3:
-    # TODO - Warn user about this
     return {}
 
   type_name = ["topicClassValue", "topicClassVocab", "topicClassVocabURI"]
   return {f'citation:{sub_typename}': sub_val for sub_val, sub_typename in zip(sub_for_codes, type_name)}
 
-def topic_classification(for_codes: list[list[str]] = list()):
+def generate_topic_classification(for_codes: list[list[str]] = list()):
   """
+  Generate the JSON for the PUT request to update a given dataset's FoR codes.
+
+  Parameters:
+    - for_codes <[str[]]> : nested list of length N that contains a dataset's FoR codes.
+  
+  Returns: <dict>
+
+    {
+      "citation:topicClassification": [
+        {
+          'citation:topicClassValue'    : sub_for_codes[0][0],
+          'citation:topicClassVocab'    : sub_for_codes[0][1],
+          'citation:topicClassVocabURI' : sub_for_codes[0][2]
+        },
+        ...,
+        {
+          'citation:topicClassValue'    : sub_for_codes[N][0],
+          'citation:topicClassVocab'    : sub_for_codes[N][1],
+          'citation:topicClassVocabURI' : sub_for_codes[N][2]
+        },
+      ],
+      "@context":{
+        "citation": "https://dataverse.org/schema/citation/"
+      }
+    }
+
   """
   return {
     "citation:topicClassification": [
@@ -126,7 +207,7 @@ def topic_classification(for_codes: list[list[str]] = list()):
     }
   }
 
-def setup_logging(filename: str="preservation-output.log"):
+def setup_logging(filename: str="for-code-addition.log"):
   """
   Sets up the log file to track the output of the script.
 
